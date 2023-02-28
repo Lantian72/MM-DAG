@@ -172,11 +172,11 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
             for i in range(P[l]):
                 re_id[l][P_id[l][i]] = i
 
-        def link(A):
+        def link(W):
             lW = {}
             dlW = {}
             for l in range(L):
-                P = A[l].shape[0]
+                P = W[l].shape[0]
                 lW[l] = np.zeros((P, P))
                 dlW[l] = np.zeros((P, P, P, P))
                 pW = {}
