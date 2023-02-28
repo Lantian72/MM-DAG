@@ -182,7 +182,7 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
                 pW = {}
                 pW[0] = np.identity(P)
                 for i in range(1, P):
-                    pW[i] = pW[i - 1] @ A[l]
+                    pW[i] = pW[i - 1] @ W[l]
                 for i in range(P):
                     lW[l] = lW[l] + pW[i]
                 for i in range(1, P):
