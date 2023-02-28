@@ -174,11 +174,11 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
 
         def link(W):
             lW = {}
-            dlW = {}
+            G_lW = {}
             for l in range(L):
                 P = W[l].shape[0]
                 lW[l] = np.zeros((P, P))
-                dlW[l] = np.zeros((P, P, P, P))
+                G_lW[l] = np.zeros((P, P, P, P))
                 pW = {}
                 pW[0] = np.identity(P)
                 for i in range(1, P):
@@ -187,8 +187,8 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
                     lW[l] = lW[l] + pW[i]
                 for i in range(1, P):
                     for r in range(i):
-                        dlW[l] += np.einsum('ik,lj->ijkl', pW[r], pW[i - r - 1])
-            return lW, dlW
+                        G_lW[l] += np.einsum('ik,lj->ijkl', pW[r], pW[i - r - 1])
+            return lW, G_lW
 
         def sigmoid(X):
             if X > 0:
@@ -202,10 +202,10 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
             return 1 / (eX + 1) / (eY + 1) / (1 + _eX) ** 2 - 1 / (eX + 1) ** 2 / (_eY + 1) / (_eX + 1)
 
         if rho > 0:
-            lW, dlW = link(W)
+            lW, G_lW = link(W)
             dB = {}
             for l in range(L):
-                dB[l] = np.einsum('xyij,ijkl->xykl', dlW[l], G_W[l])
+                dB[l] = np.einsum('xyij,ijkl->xykl', G_lW[l], G_W[l])
             for l in range(L):
                 for _l in range(L):
                     if l == _l:
