@@ -110,14 +110,14 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
                             bounds.append((0, None))
         return bounds
 
-    def _adj(gt):
+    def _adj(g):
         G = {}
         iter = 0
         for l in range(L):
             G[l] = np.zeros((P[l] * K, P[l] * K))
             for i in range(P[l] * K):
                 for j in range(P[l] * K):
-                    G[l][i, j] = gt[iter]
+                    G[l][i, j] = g[iter]
                     iter += 1
         return G
 
@@ -141,19 +141,19 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
         return loss, G_Gloss
 
     def _f(G):
-        fG = {}
-        G_fG = {}
+        W = {}
+        G_W = {}
         for l in range(L):
-            fG[l] = np.zeros((P[l], P[l]))
-            G_fG[l] = np.zeros((P[l], P[l], P[l] * K, P[l] * K))
+            W[l] = np.zeros((P[l], P[l]))
+            G_W[l] = np.zeros((P[l], P[l], P[l] * K, P[l] * K))
             for i in range(P[l]):
                 for j in range(P[l]):
-                    fG[l][i, j] = np.sum((G[l][i * K:(i + 1) * K, j * K:(j + 1) * K]) ** 2) * 0.5
-                    G_fG[l][i, j, i * K:(i + 1) * K, j * K:(j + 1) * K] = G[l][i * K:(i + 1) * K, j * K:(j + 1) * K]
-        return fG, G_fG
+                    W[l][i, j] = np.sum((G[l][i * K:(i + 1) * K, j * K:(j + 1) * K]) ** 2) * 0.5
+                    G_W[l][i, j, i * K:(i + 1) * K, j * K:(j + 1) * K] = G[l][i * K:(i + 1) * K, j * K:(j + 1) * K]
+        return W, G_W
 
     def _h(G):
-        fG, G_fG = _f(G)
+        W, G_W = _f(G)
         h = 0
         p = 0
         E = {}
@@ -162,9 +162,9 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
         for l in range(L):
             G_hG[l] = np.zeros((P[l] * K, P[l] * K))
             G_pG[l] = np.zeros((P[l] * K, P[l] * K))
-            E[l] = slin.expm(fG[l])
+            E[l] = slin.expm(W[l])
             h += np.trace(E[l]) - P[l]
-            G_hG[l] = (E[l].T.reshape(P[l] * P[l]) @ G_fG[l].reshape(P[l] * P[l], P[l] * K * P[l] * K)).reshape(P[l] * K, P[l] * K)
+            G_hG[l] = (E[l].T.reshape(P[l] * P[l]) @ G_W[l].reshape(P[l] * P[l], P[l] * K * P[l] * K)).reshape(P[l] * K, P[l] * K)
 
         re_id = {}
         for l in range(L):
@@ -173,22 +173,22 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
                 re_id[l][P_id[l][i]] = i
 
         def link(A):
-            lA = {}
-            dA = {}
+            lW = {}
+            dlW = {}
             for l in range(L):
                 P = A[l].shape[0]
-                lA[l] = np.zeros((P, P))
-                dA[l] = np.zeros((P, P, P, P))
-                pA = {}
-                pA[0] = np.identity(P)
+                lW[l] = np.zeros((P, P))
+                dlW[l] = np.zeros((P, P, P, P))
+                pW = {}
+                pW[0] = np.identity(P)
                 for i in range(1, P):
-                    pA[i] = pA[i - 1] @ A[l]
+                    pW[i] = pW[i - 1] @ A[l]
                 for i in range(P):
-                    lA[l] = lA[l] + pA[i]
+                    lW[l] = lW[l] + pW[i]
                 for i in range(1, P):
                     for r in range(i):
-                        dA[l] += np.einsum('ik,lj->ijkl', pA[r], pA[i - r - 1])
-            return lA, dA
+                        dlW[l] += np.einsum('ik,lj->ijkl', pW[r], pW[i - r - 1])
+            return lW, dlW
 
         def sigmoid(X):
             if X > 0:
@@ -202,10 +202,10 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
             return 1 / (eX + 1) / (eY + 1) / (1 + _eX) ** 2 - 1 / (eX + 1) ** 2 / (_eY + 1) / (_eX + 1)
 
         if rho > 0:
-            lA, dA = link(fG)
+            lW, dlW = link(W)
             dB = {}
             for l in range(L):
-                dB[l] = np.einsum('xyij,ijkl->xykl', dA[l], G_fG[l])
+                dB[l] = np.einsum('xyij,ijkl->xykl', dlW[l], G_W[l])
             for l in range(L):
                 for _l in range(L):
                     if l == _l:
@@ -217,45 +217,20 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
                             if (ni in re_id[l]) and (nj in re_id[l]) and (ni in re_id[_l]) and (nj in re_id[_l]):
                                 li, lj = re_id[l][ni], re_id[l][nj]
                                 _li, _lj = re_id[_l][ni], re_id[_l][nj]
-                                X = 10 * (lA[l][li, lj] - lA[l][lj, li])
-                                Y = 10 * (lA[_l][_li, _lj] - lA[_l][_lj, _li])
+                                X = 10 * (lW[l][li, lj] - lW[l][lj, li])
+                                Y = 10 * (lW[_l][_li, _lj] - lW[_l][_lj, _li])
                                 p += (sigmoid(X) - sigmoid(Y)) ** 2 * rho
                                 G_pG[l] += 40 * rho * A(X, Y) * (dB[l][li, lj] - dB[l][lj, li])
         return h, p, G_hG, G_pG
 
-    def _func(gt):
-        G = _adj(gt)
-        loss, G_Gloss = _loss(G)
-        h, p, G_hG, G_pG = _h(G)
-        g_loss = loss + h * (beta + 0.5 * alpha * h) + p
-        G_Gsmooth = {}
-        g_loss += lambda1 * np.sum(np.abs(gt))
-        for l in range(L):
-            G_Gsmooth[l] = G_Gloss[l] + (alpha * h + beta) * G_hG[l] + lambda1 + G_pG[l]
-        g_grad = _vec(G_Gsmooth)
-        return g_loss, g_grad
-
-    # def _grad(gt):
-    #     G = _adj(gt)
-    #     loss, G_Gloss = _loss(G)
-    #     h, p, G_hG, G_pG = _h(G)
-    #     g_loss = loss + h * (beta + 0.5 * alpha * h) + p
-    #     G_Gsmooth = {}
-    #
-    #     g_loss += lambda1 * np.sum(np.abs(gt))
-    #     for l in range(L):
-    #         G_Gsmooth[l] = G_Gloss[l] + (alpha * h + beta) * G_hG[l] * np.sign(G) + lambda1 + G_pG[l]
-    #     g_grad = _vec(G_Gsmooth)
-    #     return g_grad
-
-    def _debug(gt):
-        G = _adj(gt)
+    def _debug(g):
+        G = _adj(g)
         loss, G_Gloss = _loss(G)
         h, p, G_hG, G_pG = _h(G)
         print("loss:%f, p:%f, h:%f, alpha:%f" % (loss, p, h, alpha))
 
-    def _grad(gt):
-        G = _adj(gt)
+    def _grad(g):
+        G = _adj(g)
         loss, G_Gloss = _loss(G)
         h, p, G_hG, G_pG = _h(G)
         G_Gsmooth = {}
@@ -282,30 +257,26 @@ def multiDAG_functional(X, lambda1, rho, P_id, P_all, max_iter=200, alpha_max=1e
         Empty[l] = np.zeros((Pl * K, Pl * K))
         G[l] = np.random.rand(Pl * K, Pl * K)
     bounds = _bounds()
-    gt_est = _vec(Empty)
+    g_est = _vec(Empty)
     alpha, beta, h = 1, 1, np.inf
     if G_true is not None:
-        gt_true = _vec(G_true)
-        _debug(gt_true)
+        g_true = _vec(G_true)
+        _debug(g_true)
     for _ in range(max_iter):
         while alpha < alpha_max:
-            # sol = sopt.minimize(_func, gt_est, method='l-bfgs-b', jac=True, bounds=bounds)
-            # gt_new = sol.x
-            optimizer = Adam(gt_est=gt_est)
-            gt_new = _train(optimizer)
-            G = _adj(gt_new)
+            optimizer = Adam(params=g_est)
+            g_new = _train(optimizer)
+            G = _adj(g_new)
             h_new, _, _, _ = _h(G)
-            # _func(gt_new)
-            # _debug(gt_new)
             if h_new > 0.25 * h:
                 alpha *= 10
             else:
                 break
-        gt_est, h = gt_new, h_new
+        g_est, h = g_new, h_new
         beta += alpha * h
         if alpha >= alpha_max or h <= h_tol:
             break
-    G_est = _adj(gt_est)
+    G_est = _adj(g_est)
     E_est = {}
     for l in range(L):
         E_est[l] = np.zeros((P[l], P[l]))

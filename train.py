@@ -2,11 +2,11 @@ import numpy as np
 
 
 class Adam:
-    def __init__(self, gt_est, lr=0.001, beta1=0.9, beta2=0.999):
+    def __init__(self, params, lr=0.001, beta1=0.9, beta2=0.999):
         self.lr = lr
         self.beta1 = beta1
         self.beta2 = beta2
-        self.params = gt_est
+        self.params = params
         self.iter = 0
         self.m = None
         self.v = None
