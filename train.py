@@ -10,6 +10,7 @@ class Adam:
         self.iter = 0
         self.m = None
         self.v = None
+
     def update(self, grads):
         if self.m is None:
             self.m = np.zeros_like(self.params)
